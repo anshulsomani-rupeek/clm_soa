@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: clm-soa
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app
+    envVars:
+      - key: PORT
+        value: 8080
+      - key: REDSHIFT_HOST
+        sync: false
+      - key: REDSHIFT_PORT
+        sync: false
+      - key: REDSHIFT_DB
+        sync: false
+      - key: REDSHIFT_USER
+        sync: false
+      - key: REDSHIFT_PASSWORD
+        sync: false

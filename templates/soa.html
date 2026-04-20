@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% if bank == 'sib' %}{{ account_no }} SIB CLM SOA{% else %}Federal Bank - Statement of Account{% endif %}
+    </title>
+    <style>
+        body {
+            font-family: Arial, Helvetica, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f0f2f5;
+            color: #333;
+        }
+
+        .container {
+            width: 210mm;
+            margin: 20px auto;
+            background: #fff;
+            padding: 0;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
+            box-sizing: border-box;
+            position: relative;
+        }
+
+        /* Premium Header Bar (Simplified to B&W) */
+        .premium-header {
+            background-color: #fff;
+            color: #333;
+            padding: 5px 30px 2px 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-weight: 600;
+            font-size: 16px;
+            border-bottom: 2px solid #dee2e6;
+        }
+
+        .header-left img {
+            height: 130px;
+            width: auto;
+            padding: 5px;
+        }
+
+        .header-right img {
+            height: 70px;
+            width: auto;
+            padding: 5px;
+        }
+
+        .premium-header div {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex: 1;
+        }
+
+        .header-left {
+            justify-content: flex-start !important;
+        }
+
+        .header-right {
+            justify-content: flex-end !important;
+        }
+
+        .header-center {
+            text-align: center;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            font-size: 17px;
+            flex: 2 !important;
+        }
+
+        /* New Improved Details Box Alignment */
+        .details-box {
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            padding: 20px;
+            display: grid;
+            /* Label, Colon, Value, Label, Colon, Value */
+            grid-template-columns: 115px 10px 1.2fr 115px 10px 1fr;
+            grid-row-gap: 12px;
+            grid-column-gap: 5px;
+            font-size: 10.5px;
+            margin-bottom: 30px;
+            align-items: start;
+        }
+
+        .sib-label {
+            font-weight: bold;
+            color: #000;
+        }
+
+        .sib-colon {
+            font-weight: bold;
+            color: #000;
+            text-align: center;
+        }
+
+        .sib-value {
+            font-weight: normal;
+            color: #000;
+            word-break: break-word;
+            padding-right: 15px;
+        }
+
+        /* Responsive handle if needed, but for PDF (A4) this fixed grid is better */
+
+        /* Table Styling */
+        .table-wrapper {
+            padding: 0 30px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 10px;
+        }
+
+        th {
+            background-color: #f8f9fa;
+            color: #000;
+            border: 1px solid #888;
+            padding: 6px 8px;
+            font-weight: 600;
+            text-align: center;
+        }
+
+        td {
+            border: 1px solid #ccc;
+            padding: 5px 8px;
+            color: #000;
+        }
+
+        tr:nth-child(even) {
+            background-color: #fff;
+        }
+
+        tr:nth-child(odd) {
+            background-color: #fff;
+        }
+
+        .text-right {
+            text-align: right;
+        }
+
+        .text-center {
+            text-align: center;
+        }
+
+        .grand-total-row {
+            font-weight: 700;
+            background-color: #fff !important;
+        }
+
+        .grand-total-label {
+            text-align: center;
+            text-transform: uppercase;
+        }
+
+        /* Footer Area */
+        .footer {
+            padding: 30px;
+            font-size: 11px;
+            color: #777;
+            text-align: center;
+        }
+
+        .download-btn {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            background: #004B87;
+            color: white;
+            border: none;
+            padding: 12px 25px;
+            border-radius: 5px;
+            cursor: pointer;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
+            font-weight: bold;
+            z-index: 1000;
+        }
+
+        .download-btn:hover {
+            background: #003a69;
+        }
+
+        @media print {
+            @page {
+                size: A4;
+                margin: 0mm;
+                /* Removes browser default headers/footers */
+            }
+
+            body {
+                background: none;
+                margin: 0;
+                padding: 0;
+            }
+
+            .container {
+                box-shadow: none;
+                margin: 0 auto;
+                width: 100%;
+                max-width: none;
+                border: none;
+            }
+
+            .download-btn {
+                display: none;
+            }
+
+            /* Prevent page breaks inside the header and footer */
+            .details-container,
+            .footer {
+                page-break-inside: avoid;
+            }
+
+            /* Ensure table rows don't break awkwardly */
+            tr {
+                page-break-inside: avoid;
+                page-break-after: auto;
+            }
+
+            /* Hide URL, Date, Page Numbers added by browser */
+            header,
+            footer {
+                display: none !important;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <button class="download-btn" onclick="window.print()">Download as PDF</button>
+
+    <div class="container" id="printableArea">
+        <!-- Premium Header Bar -->
+        <div class="premium-header">
+            <div class="header-left">
+                <img src="/static/rpk-cap-logo.png" alt="Rupeek Capital">
+            </div>
+            <div class="header-center">LOAN STATEMENT</div>
+            <div class="header-right">
+                {% if bank == 'federal' %}
+                <img src="/static/fed-bank-logo.jpg" alt="Federal Bank">
+                {% else %}
+                <img src="/static/sib logo.png" alt="South Indian Bank">
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="details-container" style="padding: 30px;">
+            {% if bank == 'sib' %}
+            <div class="details-box">
+                <!-- Row 1 -->
+                <div class="sib-label">Customer Name</div>
+                <div class="sib-colon">:</div>
+                <div class="sib-value">{{ customer_name }}</div>
+
+                <div class="sib-label">Branch Name</div>
+                <div class="sib-colon">:</div>
+                <div class="sib-value">{{ branch_name }}</div>
+
+                <!-- Row 2 -->
+                <div class="sib-label">Address</div>
+                <div class="sib-colon">:</div>
+                <div class="sib-value" style="grid-row: span 1;">{{ permanent_address if permanent_address else '—' }}
+                </div>
+
+                <div class="sib-label">LOS ID</div>
+                <div class="sib-colon">:</div>
+                <div class="sib-value">{{ los_id }}</div>
+
+                <!-- Row 3 -->
+                <div class="sib-label">SIB Loan ID</div>
+                <div class="sib-colon">:</div>
+                <div class="sib-value">{{ account_no }}</div>
+
+                <div class="sib-label">RCPL Loan ID</div>
+                <div class="sib-colon">:</div>
+                <div class="sib-value">{{ rcpl_loan_account }}</div>
+
+                <!-- Row 4 -->
+                <div class="sib-label">Registered Mobile</div>
+                <div class="sib-colon">:</div>
+                <div class="sib-value">
+                    {% if mobile_number and mobile_number|length == 13 and mobile_number.startswith('+91') %}
+                    {{ mobile_number[:3] }} {{ mobile_number[3:8] }} {{ mobile_number[8:] }}
+                    {% else %}
+                    {{ mobile_number }}
+                    {% endif %}
+                </div>
+
+                <div class="sib-label">Email ID</div>
+                <div class="sib-colon">:</div>
+                <div class="sib-value">{{ email if email else '—' }}</div>
+
+                <!-- Row 5 -->
+                <div class="sib-label">Account Status</div>
+                <div class="sib-colon">:</div>
+                <div class="sib-value" style="text-transform: uppercase;">{{ status }}</div>
+
+                <div class="sib-label">Scheme</div>
+                <div class="sib-colon">:</div>
+                <div class="sib-value">{{ scheme_short if scheme_short else scheme_name }}</div>
+
+                <!-- Row 6 -->
+                <div class="sib-label">Loan Amount</div>
+                <div class="sib-colon">:</div>
+                <div class="sib-value">{{ "{:,.2f}".format(total_loan_amount|default(0)) }}</div>
+
+                <div class="sib-label">Outstanding Amount</div>
+                <div class="sib-colon">:</div>
+                <div class="sib-value">
+                    {% if status == 'CLOSED' %}
+                    0.00
+                    {% else %}
+                    {{ "{:,.2f}".format(transactions[-1].balance if transactions else 0) }}
+                    {% endif %}
+                </div>
+
+                <!-- Row 7 -->
+                <div class="sib-label">Loan Start Date</div>
+                <div class="sib-colon">:</div>
+                <div class="sib-value">{{ opening_date }}</div>
+
+                <div class="sib-label">Loan End Date</div>
+                <div class="sib-colon">:</div>
+                <div class="sib-value">{{ gold_loan_end if gold_loan_end and gold_loan_end != '—' else loan_end_date }}</div>
+
+                <!-- Row 8 -->
+                <div class="sib-label">Transaction Start</div>
+                <div class="sib-colon">:</div>
+                <div class="sib-value">{{ loan_start_date }}</div>
+
+                <div class="sib-label">Transaction End</div>
+                <div class="sib-colon">:</div>
+                <div class="sib-value">{{ closing_date }}</div>
+            </div>
+            {% else %}
+            <div class="details-box">
+                <div class="sib-label">Customer Name</div>
+                <div class="sib-colon">:</div>
+                <div class="sib-value">{{ customer_name }}</div>
+
+                <div class="sib-label">Branch Name</div>
+                <div class="sib-colon">:</div>
+                <div class="sib-value">{{ branch_name }}</div>
+
+                <div class="sib-label">Account No</div>
+                <div class="sib-colon">:</div>
+                <div class="sib-value">{{ account_no }}</div>
+
+                <div class="sib-label">Scheme Name</div>
+                <div class="sib-colon">:</div>
+                <div class="sib-value">{{ scheme_name }}</div>
+
+                <div class="sib-label">Date of Opening</div>
+                <div class="sib-colon">:</div>
+                <div class="sib-value">{{ opening_date }}</div>
+
+                <div class="sib-label">Date of Closing</div>
+                <div class="sib-colon">:</div>
+                <div class="sib-value">{{ closing_date }}</div>
+
+                <div class="sib-label">Mobile Number</div>
+                <div class="sib-colon">:</div>
+                <div class="sib-value">{{ mobile_number }}</div>
+
+                <div></div>
+                <div></div>
+                <div></div> <!-- Empty cells to complete the grid if needed -->
+            </div>
+            {% endif %}
+        </div>
+
+        <div class="table-wrapper">
+            <table id="soaTable">
+                <thead>
+                    <tr>
+                        <th style="width: 15%;">Value Date</th>
+                        <th style="width: 40%;">Particulars</th>
+                        <th style="width: 15%;">Withdrawals</th>
+                        <th style="width: 15%;">Deposits</th>
+                        <th style="width: 10%;">Balance</th>
+                        <th style="width: 5%;">Cr/Dr</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for txn in transactions %}
+                    <tr>
+                        <td class="text-center">{{ txn.date }}</td>
+                        <td>{{ txn.narration }}</td>
+                        <td class="text-right">
+                            {% if txn.withdrawal > 0 %}{{ "%.2f"|format(txn.withdrawal) }}{% endif %}
+                        </td>
+                        <td class="text-right">
+                            {% if txn.deposit > 0 %}{{ "%.2f"|format(txn.deposit) }}{% endif %}
+                        </td>
+                        <td class="text-right">
+                            {% if loop.last %}
+                            {{ (txn.balance|abs|round(0, 'ceil'))|int }}
+                            {% else %}
+                            {{ txn.balance|int }}
+                            {% endif %}
+                        </td>
+                        <td class="text-center">{{ txn.cr_dr }}</td>
+                    </tr>
+                    {% endfor %}
+                    <tr class="grand-total-row">
+                        <td></td>
+                        <td class="grand-total-label">GRAND TOTAL</td>
+                        <td class="text-right">{{ "%.2f"|format(total_withdrawals) }}</td>
+                        <td class="text-right">{{ "%.2f"|format(total_deposits) }}</td>
+                        <td></td>
+                        <td></td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="footer">
+            <div style="font-size: 11px; font-weight: 600; text-align: left; padding: 20px 30px 5px 30px; color: #333;">
+                DISCLAIMER:
+            </div>
+            <div style="font-size: 9.5px; text-align: left; padding: 0 30px 20px 30px; line-height: 1.4; color: #555;">
+                This is a computer-generated statement which need not normally be signed. The contents of this statement
+                will be considered correct if no error is reported within 21 days of the statement date.
+            </div>
+            <hr style="border: 0; border-top: 1px solid #dee2e6; margin-bottom: 10px;">
+            <div style="font-weight: bold; font-size: 11px;">**** END OF STATEMENT ****</div>
+        </div>
+    </div>
+
+    <script>
+        function formatDate(dateStr) {
+            if (!dateStr || dateStr === '—') return dateStr;
+            // dateStr is already in DD-MM-YYYY format from Python
+            return dateStr;
+        }
+
+        function downloadPDF() {
+            window.print();
+        }
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Federal Bank - Statement of Account</title>
+    <!-- html2pdf library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f0f2f5;
+            color: #333;
+        }
+
+        .container {
+            width: 210mm;
+            margin: 20px auto;
+            background: #fff;
+            padding: 0;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
+            box-sizing: border-box;
+            position: relative;
+        }
+
+        /* Premium Header Bar (Simplified to B&W) */
+        .premium-header {
+            background-color: #fff;
+            color: #333;
+            padding: 5px 30px 2px 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-weight: 600;
+            font-size: 16px;
+            border-bottom: 2px solid #dee2e6;
+        }
+
+        .header-left img,
+        .header-right img {
+            height: 110px;
+            width: auto;
+            padding: 5px;
+        }
+
+        .premium-header div {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex: 1;
+        }
+
+        .header-left {
+            justify-content: flex-start !important;
+        }
+
+        .header-right {
+            justify-content: flex-end !important;
+        }
+
+        .header-center {
+            text-align: center;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            font-size: 17px;
+            flex: 2 !important;
+        }
+
+        /* Details Box */
+        .details-container {
+            padding: 30px;
+        }
+
+        .details-box {
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            padding: 20px;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            font-size: 14px;
+            margin-bottom: 30px;
+        }
+
+        .detail-item {
+            display: flex;
+            align-items: center;
+        }
+
+        .detail-label {
+            font-weight: 600;
+            color: #555;
+            width: 130px;
+        }
+
+        .detail-colon {
+            width: 20px;
+        }
+
+        .detail-value {
+            font-weight: 600;
+            color: #000;
+            white-space: nowrap;
+        }
+
+        /* Table Styling */
+        .table-wrapper {
+            padding: 0 30px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+
+        th {
+            background-color: #f8f9fa;
+            color: #000;
+            border: 1px solid #888;
+            padding: 10px;
+            font-weight: 600;
+            text-align: center;
+        }
+
+        td {
+            border: 1px solid #ccc;
+            padding: 8px 10px;
+            color: #000;
+        }
+
+        tr:nth-child(even) {
+            background-color: #fff;
+        }
+
+        tr:nth-child(odd) {
+            background-color: #fff;
+        }
+
+        .text-right {
+            text-align: right;
+        }
+
+        .text-center {
+            text-align: center;
+        }
+
+        .grand-total-row {
+            font-weight: 700;
+            background-color: #fff !important;
+        }
+
+        .grand-total-label {
+            text-align: center;
+            text-transform: uppercase;
+        }
+
+        /* Footer Area */
+        .footer {
+            padding: 30px;
+            font-size: 11px;
+            color: #777;
+            text-align: center;
+        }
+
+        .download-btn {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            background: #004B87;
+            color: white;
+            border: none;
+            padding: 12px 25px;
+            border-radius: 5px;
+            cursor: pointer;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
+            font-weight: bold;
+            z-index: 1000;
+        }
+
+        .download-btn:hover {
+            background: #003a69;
+        }
+
+        @media print {
+            .download-btn {
+                display: none;
+            }
+
+            body {
+                background: none;
+            }
+
+            .container {
+                box-shadow: none;
+                margin: 0;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <button class="download-btn" onclick="downloadPDF()">Download as PDF</button>
+
+    <div class="container" id="printableArea">
+        <!-- Premium Header Bar -->
+        <div class="premium-header">
+            <div class="header-left">
+                <img src="Rupeek Capital Logo (1).png" alt="Rupeek Capital">
+            </div>
+            <div class="header-center">LOAN STATEMENT</div>
+            <div class="header-right">
+                <img src="Federal Logo_removed_page-0001-Photoroom.png" alt="Federal Bank">
+            </div>
+        </div>
+
+        <div class="details-container">
+            <div class="details-box">
+                <div class="detail-item">
+                    <span class="detail-label">Customer Name</span>
+                    <span class="detail-colon">:</span>
+                    <span class="detail-value">SHITAL SAGAR INGALE</span>
+                </div>
+                <div class="detail-item">
+                    <span class="detail-label">Branch Name</span>
+                    <span class="detail-colon">:</span>
+                    <span class="detail-value">Bangalore/ Peenya Industrial Area</span>
+                </div>
+                <div class="detail-item">
+                    <span class="detail-label">Account No</span>
+                    <span class="detail-colon">:</span>
+                    <span class="detail-value">17756100091907</span>
+                </div>
+                <div class="detail-item">
+                    <span class="detail-label">Sol ID</span>
+                    <span class="detail-colon">:</span>
+                    <span class="detail-value">2611</span>
+                </div>
+                <div class="detail-item">
+                    <span class="detail-label">Date of Opening</span>
+                    <span class="detail-colon">:</span>
+                    <span class="detail-value" id="openingDate">-</span>
+                </div>
+                <div class="detail-item">
+                    <span class="detail-label">Date of Closing</span>
+                    <span class="detail-colon">:</span>
+                    <span class="detail-value" id="closingDate">-</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="table-wrapper">
+            <table id="soaTable">
+                <thead>
+                    <tr>
+                        <th>Value Date</th>
+                        <th style="width: 40%;">Particulars</th>
+                        <th>Withdrawals</th>
+                        <th>Deposits</th>
+                        <th>Balance</th>
+                        <th>Cr/Dr</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <!-- Populated by JS -->
+                </tbody>
+                <tfoot>
+                    <tr class="grand-total-row">
+                        <td></td>
+                        <td class="grand-total-label">GRAND TOTAL</td>
+                        <td class="text-right" id="totalWithdrawals">0.00</td>
+                        <td class="text-right" id="totalDeposits">0.00</td>
+                        <td></td>
+                        <td></td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+
+        <div class="footer">
+            <hr style="border: 0; border-top: 1px solid #dee2e6; margin-bottom: 10px;">
+            END OF THE STATEMENT
+        </div>
+    </div>
+
+    <script>
+        const transactions = [
+            { date: "2024-10-17", narration: "Loan Disbursement", amount: 42971, balance: -42971, type: "W" },
+            { date: "2024-10-29", narration: "Interest Accrual (17-29 Oct 2025)", amount: 310, balance: -43281, type: "W" },
+            { date: "2024-10-29", narration: "Rebate", amount: 139, balance: -43142, type: "D" },
+            { date: "2024-10-29", narration: "REPAYMENT", amount: 43142, balance: 0, type: "D" }
+        ];
+
+        function formatDate(dateStr) {
+            if (!dateStr) return "";
+            const [y, m, d] = dateStr.split('-');
+            return `${d}-${m}-${y}`;
+        }
+
+        const tbody = document.querySelector('#soaTable tbody');
+        let totalW = 0;
+        let totalD = 0;
+
+        transactions.forEach(txn => {
+            const tr = document.createElement('tr');
+            let withdrawal = "";
+            let deposit = "";
+            let crDr = "";
+
+            if (txn.type === "W") {
+                withdrawal = txn.amount.toFixed(2);
+                totalW += txn.amount;
+                crDr = "DR";
+            } else {
+                deposit = txn.amount.toFixed(2);
+                totalD += txn.amount;
+                crDr = "CR";
+            }
+
+            tr.innerHTML = `
+                <td class="text-center">${formatDate(txn.date)}</td>
+                <td>${txn.narration}</td>
+                <td class="text-right">${withdrawal}</td>
+                <td class="text-right">${deposit}</td>
+                <td class="text-right">${Number(txn.balance).toFixed(2)}</td>
+                <td class="text-center">${crDr}</td>
+            `;
+            tbody.appendChild(tr);
+        });
+
+        document.getElementById('totalWithdrawals').textContent = totalW.toFixed(2);
+        document.getElementById('totalDeposits').textContent = totalD.toFixed(2);
+
+        // Update Opening and Closing Dates
+        const openingTxn = transactions.find(t => t.narration.toLowerCase().includes("disbursement"));
+        const closingTxn = transactions.find(t => t.narration.toLowerCase().includes("closure") || t.narration.toLowerCase().includes("repayment") && t.balance === 0);
+
+        if (openingTxn) {
+            document.getElementById('openingDate').textContent = formatDate(openingTxn.date);
+        }
+        if (closingTxn) {
+            document.getElementById('closingDate').textContent = formatDate(closingTxn.date);
+        }
+
+        function downloadPDF() {
+            const element = document.getElementById('printableArea');
+            const opt = {
+                margin: 0,
+                filename: '17756100091907_Federal_SOA.pdf',
+                image: { type: 'jpeg', quality: 0.98 },
+                html2canvas: { scale: 2, useCORS: true, scrollY: 0 },
+                jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+                pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
+            };
+            html2pdf().set(opt).from(element).save();
+        }
+    </script>
+</body>
+
+</html>

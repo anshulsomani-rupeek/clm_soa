@@ -1,0 +1,686 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SOA Dashboard</title>
+
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', sans-serif; background: #f0f4f8; color: #1a2030; }
+
+  .top-bar {
+    background: #003366;
+    color: white;
+    padding: 14px 28px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .top-bar h1 { font-size: 15px; font-weight: 600; letter-spacing: 0.03em; }
+  .top-bar span { font-size: 12px; opacity: 0.6; }
+
+  .input-section {
+    background: #1a1f2e;
+    padding: 20px 28px;
+    border-bottom: 3px solid #003366;
+  }
+  .input-section label {
+    display: block;
+    color: #8ca0bc;
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+  .input-row { display: flex; gap: 12px; align-items: flex-start; }
+
+  textarea {
+    flex: 1;
+    background: #0d1117;
+    border: 1px solid #2a3a52;
+    border-radius: 6px;
+    color: #a8d4ff;
+    font-family: 'Courier New', monospace;
+    font-size: 12px;
+    padding: 12px 14px;
+    resize: vertical;
+    height: 130px;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  textarea:focus { border-color: #4a9eff; }
+  textarea::placeholder { color: #3a5070; }
+
+  .btn-row { display: flex; flex-direction: column; gap: 8px; align-self: flex-end; }
+
+  .btn-generate {
+    background: #003366;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    padding: 11px 22px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.2s;
+  }
+  .btn-generate:hover { background: #0055aa; }
+  .btn-generate:disabled { background: #334466; cursor: not-allowed; opacity: 0.7; }
+
+  .btn-pdf {
+    background: #1a6b3a;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    padding: 11px 22px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.2s;
+    display: none;
+  }
+  .btn-pdf:hover { background: #228844; }
+
+  .error-msg {
+    color: #ff6b6b;
+    font-size: 12px;
+    margin-top: 8px;
+    font-family: monospace;
+  }
+
+  .ai-insight {
+    background: #0d1f3c;
+    border-left: 3px solid #4a9eff;
+    margin: 0 28px;
+    padding: 12px 18px;
+    border-radius: 0 6px 6px 0;
+    font-size: 13px;
+    color: #c8ddf8;
+    display: none;
+    margin-top: 16px;
+  }
+  .ai-insight .ai-label {
+    font-size: 10px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: #4a9eff;
+    margin-bottom: 6px;
+    font-weight: 600;
+  }
+  .ai-loading { color: #5a8ab8; font-style: italic; }
+
+  /* Dashboard output */
+  #dashboard { padding: 24px 28px; display: none; }
+
+  .dash-action-bar {
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: 16px;
+    gap: 10px;
+  }
+  .dash-btn-pdf {
+    background: #1a6b3a;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    padding: 9px 20px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+  }
+  .dash-btn-pdf:hover { background: #228844; }
+
+  /* Info strip */
+  .info-strip {
+    background: white;
+    border: 1px solid #dde4ee;
+    border-radius: 8px;
+    padding: 14px 20px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 24px;
+    margin-bottom: 20px;
+    font-size: 13px;
+  }
+  .info-item label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em; color: #7a90ab; display: block; margin-bottom: 2px; }
+  .info-item strong { font-size: 14px; color: #1a2030; }
+  .info-item.highlight strong { color: #006633; }
+
+  /* KPI cards */
+  .kpi-row { display: flex; gap: 14px; margin-bottom: 20px; flex-wrap: wrap; }
+  .kpi {
+    background: white;
+    border: 1px solid #dde4ee;
+    border-radius: 8px;
+    padding: 14px 18px;
+    flex: 1;
+    min-width: 140px;
+    border-top: 3px solid var(--kc, #003366);
+  }
+  .kpi .k-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em; color: #7a90ab; margin-bottom: 6px; }
+  .kpi .k-val { font-size: 20px; font-weight: 700; color: var(--kc, #1a2030); font-variant-numeric: tabular-nums; }
+  .kpi .k-sub { font-size: 11px; color: #aaa; margin-top: 3px; }
+
+  /* Table */
+  .table-wrap {
+    background: white;
+    border: 1px solid #dde4ee;
+    border-radius: 8px;
+    overflow: hidden;
+    margin-bottom: 20px;
+  }
+  .table-title {
+    background: #003366;
+    color: white;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 10px 16px;
+  }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  thead th {
+    background: #eef2f8;
+    padding: 9px 14px;
+    text-align: left;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #5a7090;
+    font-weight: 700;
+    border-bottom: 1px solid #dde4ee;
+    white-space: nowrap;
+  }
+  th.num, td.num { text-align: right; }
+  tbody tr { border-bottom: 1px solid #eef2f8; }
+  tbody tr:last-child { border-bottom: none; }
+  tbody tr:hover { background: #f7f9fd; }
+  td { padding: 10px 14px; vertical-align: middle; }
+  td.date { font-family: monospace; font-size: 12px; color: #5a7090; white-space: nowrap; }
+  td.narr { color: #1a2030; }
+  td.dr { color: #cc2200; font-family: monospace; font-weight: 600; }
+  td.cr { color: #006633; font-family: monospace; font-weight: 600; }
+  td.bal-neg { color: #cc2200; font-family: monospace; font-weight: 700; }
+  td.bal-zero { color: #006633; font-family: monospace; font-weight: 700; }
+  .tag {
+    display: inline-block;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    padding: 2px 7px;
+    border-radius: 4px;
+    text-transform: uppercase;
+  }
+  .tag.dr { background: #fff0ee; color: #cc2200; }
+  .tag.cr { background: #eefaf3; color: #006633; }
+
+  .sep-row td {
+    background: #edf3fb;
+    color: #003366;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 5px 14px;
+    border-top: 1px solid #c8d8ee;
+    border-bottom: 1px solid #c8d8ee;
+  }
+
+  /* Summary */
+  .summary-wrap {
+    background: white;
+    border: 1px solid #dde4ee;
+    border-radius: 8px;
+    overflow: hidden;
+    margin-bottom: 20px;
+  }
+  .sum-row { display: flex; justify-content: space-between; padding: 9px 18px; font-size: 13px; border-bottom: 1px solid #f0f4f8; }
+  .sum-row:last-child { border-bottom: none; }
+  .sum-row.total { background: #f0f7f4; font-weight: 700; border-top: 2px solid #003366; }
+  .sum-row .s-label { color: #3a5070; }
+  .sum-row .s-val { font-family: monospace; color: #1a2030; }
+  .sum-row.total .s-val { color: #006633; font-size: 15px; }
+
+  .footer { text-align: center; color: #aaa; font-size: 11px; padding: 16px; }
+
+  @media print {
+    .input-section, .top-bar, .ai-insight, .dash-action-bar { display: none !important; }
+    #dashboard { display: block !important; padding: 0; }
+    body { background: white; }
+  }
+</style>
+</head>
+<body>
+
+<div class="top-bar">
+  <h1>SOA Dashboard Generator</h1>
+  <span>Paste JSON · Generate · Download PDF</span>
+</div>
+
+<div class="input-section">
+  <label>JSON Input — Paste your LMS event data</label>
+  <div class="input-row">
+    <textarea id="jsonInput" placeholder='[{"event_type":"MIS","value_recorded_date":"2025-08-30","principal_amount":38393, ...}]'></textarea>
+    <div class="btn-row">
+      <button class="btn-generate" id="btnGenerate" onclick="generate()">⚡ Generate Dashboard</button>
+    </div>
+  </div>
+  <div class="error-msg" id="errMsg"></div>
+</div>
+
+<div class="ai-insight" id="aiInsight">
+  <div class="ai-label">AI Analysis</div>
+  <div id="aiText" class="ai-loading">Analysing loan data...</div>
+</div>
+
+<div id="dashboard"></div>
+
+<script>
+// ── helpers ──────────────────────────────────────────────────────────────────
+function fmt(n) {
+  return Math.abs(n).toLocaleString('en-IN', {minimumFractionDigits:2, maximumFractionDigits:2});
+}
+
+// ── state ────────────────────────────────────────────────────────────────────
+let lastRows = [], lastMeta = {}, lastAllRows = [];
+
+// ── generate ─────────────────────────────────────────────────────────────────
+async function generate() {
+  const raw = document.getElementById('jsonInput').value.trim();
+  const err = document.getElementById('errMsg');
+  err.textContent = '';
+
+  let data;
+  try {
+    data = JSON.parse(raw);
+    if (!Array.isArray(data)) throw new Error('Expected a JSON array');
+  } catch(e) {
+    err.textContent = 'Invalid JSON: ' + e.message;
+    return;
+  }
+
+  const btn = document.getElementById('btnGenerate');
+  btn.disabled = true;
+  btn.textContent = 'Building...';
+
+  try {
+    const { html, rows, meta } = buildDashboard(data);
+    lastRows = rows;
+    lastMeta = meta;
+
+    const dash = document.getElementById('dashboard');
+    dash.style.display = 'block';
+    dash.innerHTML = html;
+
+    // Trigger AI insight async
+    fetchAIInsight(data, meta);
+  } catch(e) {
+    err.textContent = 'Error: ' + e.message;
+    console.error(e);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '⚡ Generate Dashboard';
+  }
+}
+
+// ── AI insight via Anthropic API ─────────────────────────────────────────────
+async function fetchAIInsight(data, meta) {
+  const box = document.getElementById('aiInsight');
+  const txt = document.getElementById('aiText');
+  box.style.display = 'block';
+  txt.className = 'ai-loading';
+  txt.textContent = 'Analysing loan data...';
+
+  const prompt = `You are a loan analyst. Given this LMS loan data, write 2-3 short sentences summarising: total interest paid vs principal, effective cost of loan, and any notable pattern. Be concise and factual.
+
+LMS ID: ${meta.lmsId}
+Principal: Rs ${fmt(meta.disbursed)}
+Total Interest: Rs ${fmt(meta.totalInterest)}
+Rebate: Rs ${fmt(meta.totalRebate)}
+Total Repaid: Rs ${fmt(meta.totalRepay)}
+Closing Balance: Rs ${fmt(Math.abs(meta.finalBalance))}
+Disbursement Date: ${meta.disbDate}
+Closing Date: ${meta.lastDate}
+Interest Rate: ${meta.interestRate}% p.a.
+
+JSON snapshot: ${JSON.stringify(data.slice(0,4))}`;
+
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 1000,
+        messages: [{ role: 'user', content: prompt }]
+      })
+    });
+    const json = await res.json();
+    const reply = json.content?.map(b => b.text || '').join('') || 'Unable to analyse.';
+    txt.className = '';
+    txt.textContent = reply;
+  } catch(e) {
+    txt.className = '';
+    txt.textContent = 'AI analysis unavailable.';
+  }
+}
+
+// ── PDF download — builds HTML blob and downloads as .html file that auto-prints ──
+function downloadPDF() {
+  const meta = lastMeta;
+  const date = new Date().toLocaleDateString('en-IN', {day:'2-digit', month:'short', year:'numeric'});
+
+  let tableRows = '';
+  const allRows = lastAllRows || lastRows;
+  allRows.forEach(row => {
+    if (row.section) {
+      tableRows += `<tr class="sep"><td colspan="5">${row.section}</td></tr>`;
+    } else {
+      const balSign = row.balance < 0 ? '-' : '';
+      const balClass = Math.abs(row.balance) < 0.01 ? 'green' : 'red';
+      const drClass  = row.drCr === 'Dr' ? 'red' : 'green';
+      tableRows += `<tr>
+        <td class="mono">${row.date}</td>
+        <td>${row.narration}</td>
+        <td class="num ${drClass}">${fmt(row.value)}</td>
+        <td class="ctr ${drClass}">${row.drCr}</td>
+        <td class="num ${balClass} bold">${balSign}${fmt(Math.abs(row.balance))}</td>
+      </tr>`;
+    }
+  });
+
+  const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>SOA_${meta.lmsId}</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:Arial,sans-serif;font-size:11px;color:#111;padding:16px}
+.hdr{background:#003366;color:#fff;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+.hdr h1{font-size:14px;font-weight:bold}.hdr span{font-size:10px;opacity:.8}
+.meta{display:grid;grid-template-columns:repeat(4,1fr);gap:6px 16px;background:#f5f8fc;border:1px solid #dde;padding:10px 14px;margin-bottom:12px;border-radius:4px}
+.mi label{font-size:8px;text-transform:uppercase;letter-spacing:.08em;color:#778;display:block;margin-bottom:1px}
+.mi strong{font-size:12px;color:#003366}
+table{width:100%;border-collapse:collapse;margin-bottom:14px}
+thead th{background:#003366;color:#fff;padding:6px 10px;font-size:9px;text-align:left;letter-spacing:.06em}
+th.num,td.num{text-align:right}td.ctr{text-align:center}
+tbody tr{border-bottom:1px solid #eef2f8}tbody tr:nth-child(even){background:#f9fbfd}
+td{padding:5px 10px}td.mono{font-family:monospace;font-size:10px;color:#556}
+.sep td{background:#ddeeff;color:#003366;font-size:9px;font-weight:bold;letter-spacing:.1em;text-transform:uppercase;padding:3px 10px}
+.red{color:#bb1100}.green{color:#006622}.bold{font-weight:bold}
+.sw{border:1px solid #dde;border-radius:4px;overflow:hidden;margin-bottom:12px}
+.st{background:#003366;color:#fff;font-size:9px;font-weight:bold;letter-spacing:.1em;padding:6px 12px;text-transform:uppercase}
+.sg{display:grid;grid-template-columns:repeat(3,1fr)}
+.si{padding:8px 12px;border-right:1px solid #eef;border-bottom:1px solid #eef}
+.si label{font-size:8px;text-transform:uppercase;color:#778;display:block;margin-bottom:2px}
+.si strong{font-size:12px;color:#111;font-family:monospace}
+.si.tot{background:#f0f7f4;grid-column:1/-1;display:flex;justify-content:space-between;align-items:center;border-bottom:none}
+.si.tot label{font-size:10px;font-weight:bold;color:#003366}
+.si.tot strong{font-size:15px;color:#006622}
+.foot{text-align:center;color:#aaa;font-size:9px;margin-top:10px}
+@media print{@page{size:A4 landscape;margin:10mm}body{padding:0}.no-print{display:none}}
+</style></head><body>
+<div class="hdr"><h1>STATEMENT OF ACCOUNT</h1><span>Generated: ${date}</span></div>
+<div class="meta">
+  <div class="mi"><label>LMS ID</label><strong>${meta.lmsId}</strong></div>
+  <div class="mi"><label>Interest Rate</label><strong>${meta.interestRate}% p.a.</strong></div>
+  <div class="mi"><label>Slab Rate</label><strong>${meta.slabRate}%</strong></div>
+  <div class="mi"><label>Status</label><strong style="color:${meta.status==='CLOSED'?'#006622':'#cc2200'}">${meta.status}</strong></div>
+  <div class="mi"><label>Disbursed Amount</label><strong>Rs. ${fmt(meta.disbursed)}</strong></div>
+  <div class="mi"><label>Disbursement Date</label><strong>${meta.disbDate}</strong></div>
+  <div class="mi"><label>Closing Date</label><strong>${meta.lastDate}</strong></div>
+  <div class="mi"><label>Outstanding Balance</label><strong style="color:#006622">Rs. ${fmt(Math.abs(meta.finalBalance))}</strong></div>
+</div>
+<table>
+  <thead><tr>
+    <th style="width:95px">Date</th><th>Narration</th>
+    <th class="num" style="width:110px">Value (Rs.)</th>
+    <th class="ctr" style="width:55px">Dr/Cr</th>
+    <th class="num" style="width:140px">Outstanding Balance (Rs.)</th>
+  </tr></thead>
+  <tbody>${tableRows}</tbody>
+</table>
+<div class="sw">
+  <div class="st">Summary</div>
+  <div class="sg">
+    <div class="si"><label>Principal Disbursed</label><strong>Rs. ${fmt(meta.disbursed)}</strong></div>
+    <div class="si"><label>Total Interest Accrued</label><strong>Rs. ${fmt(meta.totalInterest)}</strong></div>
+    <div class="si"><label>Total Debits</label><strong>Rs. ${fmt(meta.totalDr)}</strong></div>
+    <div class="si"><label>Rebate / Cashback</label><strong>Rs. ${fmt(meta.totalRebate)}</strong></div>
+    <div class="si"><label>Total Repayment</label><strong>Rs. ${fmt(meta.totalRepay)}</strong></div>
+    <div class="si"><label>Total Credits</label><strong>Rs. ${fmt(meta.totalCr)}</strong></div>
+    <div class="si tot"><label>Closing Outstanding Balance</label><strong>Rs. ${fmt(Math.abs(meta.finalBalance))}</strong></div>
+  </div>
+</div>
+<div class="foot">System generated statement &middot; LMS ID: ${meta.lmsId} &middot; ${date}</div>
+</body></html>`;
+
+  // Download as HTML file — user opens it and prints to PDF
+  const blob = new Blob([html], { type: 'text/html' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  a.download = `SOA_${meta.lmsId}_${meta.lastDate}.html`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+// ── dashboard builder ─────────────────────────────────────────────────────────
+function buildDashboard(data) {
+  const ORDER = {MIS: 0, DAY_CHANGE: 1, REPAYMENT: 2};
+  data.sort((a,b) => {
+    const d = a.value_recorded_date.localeCompare(b.value_recorded_date);
+    if (d !== 0) return d;
+    return (ORDER[a.event_type]||0) - (ORDER[b.event_type]||0);
+  });
+
+  const mis          = data.find(r => r.event_type === 'MIS');
+  const lmsId        = mis ? mis.lms_id : (data[0]?.lms_id || '—');
+  const interestRate = mis ? mis.interest_rate : '—';
+  const slabRate     = mis ? mis.slab_rate : '—';
+  const disbursed    = mis ? mis.principal_amount : 0;
+  const disbDate     = mis ? mis.value_recorded_date : '—';
+  const borrowerName = mis ? (mis.borrower_name || '') : '';
+
+  const dayChanges = data.filter(r => r.event_type === 'DAY_CHANGE');
+  const repayments = data.filter(r => r.event_type === 'REPAYMENT');
+
+  // ==========================================================
+  // INTEREST + REPAYMENT LOGIC (final)
+  // Rules:
+  //   1. Every calendar month gets ONE interest accrual entry
+  //   2. Non-closing months → last DAY_CHANGE of month → unposted_interest → post 1st next month
+  //   3. Closing month → DAY_CHANGE on lastRepDate → unposted_interest → post on lastRepDate
+  //   4. Mid-month repayments → Rebate + Repayment only, NO interest
+  //   5. On closing date: interest accrual THEN Rebate + Repayment
+  // ==========================================================
+
+  const allRepDates = [...new Set(repayments.map(r => r.value_recorded_date))].sort();
+  const lastRepDate = allRepDates[allRepDates.length - 1];
+  const lastRepMo   = lastRepDate ? lastRepDate.substring(0,7) : null;
+
+  const repByDate = {};
+  repayments.forEach(r => {
+    if (!repByDate[r.value_recorded_date]) repByDate[r.value_recorded_date] = [];
+    repByDate[r.value_recorded_date].push(r);
+  });
+
+  const dcByDate = {};
+  const dcByMonth = {};
+  dayChanges.forEach(r => {
+    const mo = r.value_recorded_date.substring(0,7);
+    if (!dcByDate[r.value_recorded_date]) dcByDate[r.value_recorded_date] = [];
+    dcByDate[r.value_recorded_date].push(r);
+    if (!dcByMonth[mo]) dcByMonth[mo] = [];
+    dcByMonth[mo].push(r);
+  });
+
+  const allMonths = [...new Set([
+    ...dayChanges.map(r => r.value_recorded_date.substring(0,7)),
+    ...(lastRepMo ? [lastRepMo] : [])
+  ])].sort();
+
+  const interestEntries = allMonths.map(mo => {
+    const isClosing = (mo === lastRepMo);
+    const recs = (dcByMonth[mo] || []).slice().sort((a,b) => a.value_recorded_date.localeCompare(b.value_recorded_date));
+
+    let interest = 0, postDate, endDate;
+
+    if (isClosing) {
+      const dcsOnRep = (dcByDate[lastRepDate] || []).slice().sort((a,b) => a.value_recorded_date.localeCompare(b.value_recorded_date));
+      const dcRec    = dcsOnRep.length > 0 ? dcsOnRep[dcsOnRep.length - 1] : null;
+      const repRec   = (repByDate[lastRepDate] || []).find(r => r.unposted_interest > 0);
+      interest = dcRec && dcRec.unposted_interest > 0 ? dcRec.unposted_interest : (repRec ? repRec.unposted_interest : 0);
+      postDate = lastRepDate;
+      endDate  = lastRepDate;
+    } else {
+      const rec = recs.length > 0 ? recs[recs.length - 1] : null;
+      if (!rec) return null;
+      interest = rec.unposted_interest || 0;
+      endDate  = rec.value_recorded_date;
+      const d  = new Date(endDate); d.setDate(d.getDate() + 1);
+      postDate = d.toISOString().split('T')[0];
+    }
+
+    if (interest <= 0) return null;
+    return { mo, postDate, endDate, interest };
+  }).filter(Boolean);
+
+  // Build rows
+  let balance = 0;
+  const rows = [];
+  function pushSection(label) { rows.push({ section: label }); }
+  function pushRow(date, narration, value, drCr) {
+    if (drCr === 'Dr') balance -= value; else balance += value;
+    rows.push({ date, narration, value, drCr, balance });
+  }
+
+  // 1. Disbursement
+  if (mis) {
+    pushSection('Disbursement');
+    balance -= mis.principal_amount;
+    rows.push({ date: mis.value_recorded_date, narration: 'Loan Disbursement', value: mis.principal_amount, drCr: 'Dr', balance });
+  }
+
+  // Interleave interest entries + repayment date events in date order
+  const events = [];
+  interestEntries.forEach(e => events.push({ date: e.postDate, type: 'interest', data: e }));
+  allRepDates.forEach(d  => events.push({ date: d, type: 'repayment', data: repByDate[d] }));
+  events.sort((a,b) => {
+    const d = a.date.localeCompare(b.date);
+    if (d !== 0) return d;
+    return a.type === 'interest' ? -1 : 1; // interest before repayment on same date
+  });
+
+  events.forEach(ev => {
+    const moLabel = new Date(ev.date.substring(0,7) + '-01').toLocaleString('en', { month: 'long', year: 'numeric' });
+    if (ev.type === 'interest') {
+      const { mo, postDate, endDate, interest } = ev.data;
+      pushSection(`${moLabel} — Interest Accrual`);
+      pushRow(postDate, `Interest Accrual (${mo}-01 to ${endDate})`, interest, 'Dr');
+    } else {
+      pushSection(`${moLabel} — Repayment`);
+      ev.data.forEach(rep => {
+        if (rep.transit_cashback && rep.transit_cashback > 0)
+          pushRow(rep.value_recorded_date, 'Rebate', rep.transit_cashback, 'Cr');
+        if (rep.transit_paid_amount && rep.transit_paid_amount > 0)
+          pushRow(rep.value_recorded_date, 'Repayment', rep.transit_paid_amount, 'Cr');
+      });
+    }
+  });
+
+  // KPIs
+  const totalDr      = rows.filter(r=>!r.section && r.drCr==='Dr').reduce((s,r)=>s+r.value,0);
+  const totalCr      = rows.filter(r=>!r.section && r.drCr==='Cr').reduce((s,r)=>s+r.value,0);
+  const totalInterest= rows.filter(r=>!r.section && r.narration.startsWith('Interest Accrual')).reduce((s,r)=>s+r.value,0);
+  const totalRepay   = rows.filter(r=>!r.section && r.narration==='Repayment').reduce((s,r)=>s+r.value,0);
+  const totalRebate  = rows.filter(r=>!r.section && r.narration==='Rebate').reduce((s,r)=>s+r.value,0);
+  const finalBalance = rows.filter(r=>!r.section).slice(-1)[0]?.balance || 0;
+  const lastDate     = repayments.slice(-1)[0]?.value_recorded_date || '—';
+  const status       = Math.abs(finalBalance) < 0.01 ? 'CLOSED' : 'ACTIVE';
+
+  const meta = { lmsId, borrowerName, interestRate, slabRate, disbursed, disbDate, lastDate, status,
+                 totalDr, totalCr, totalInterest, totalRepay, totalRebate, finalBalance };
+
+  // Build HTML
+  let html = '';
+
+  // Action bar
+  html += `<div class="dash-action-bar">
+    <button class="dash-btn-pdf" onclick="downloadPDF()">⬇ Download PDF</button>
+  </div>`;
+
+  // Info strip
+  html += `<div class="info-strip">
+    <div class="info-item"><label>LMS ID</label><strong>${lmsId}</strong></div>
+    <div class="info-item"><label>Interest Rate</label><strong>${interestRate}% p.a.</strong></div>
+    <div class="info-item"><label>Slab Rate</label><strong>${slabRate}%</strong></div>
+    <div class="info-item"><label>Disbursed Amount</label><strong>Rs. ${fmt(disbursed)}</strong></div>
+    <div class="info-item"><label>Disbursement Date</label><strong>${disbDate}</strong></div>
+    <div class="info-item"><label>Closing Date</label><strong>${lastDate}</strong></div>
+    <div class="info-item highlight"><label>Status</label><strong>${status}</strong></div>
+    <div class="info-item highlight"><label>Outstanding Balance</label><strong>Rs. ${fmt(Math.abs(finalBalance))}</strong></div>
+  </div>`;
+
+  // KPI cards
+  html += `<div class="kpi-row">
+    <div class="kpi" style="--kc:#003366"><div class="k-label">Principal Disbursed</div><div class="k-val">Rs. ${fmt(disbursed)}</div><div class="k-sub">${disbDate}</div></div>
+    <div class="kpi" style="--kc:#cc2200"><div class="k-label">Total Interest Accrued</div><div class="k-val">Rs. ${fmt(totalInterest)}</div><div class="k-sub">All months combined</div></div>
+    <div class="kpi" style="--kc:#006633"><div class="k-label">Total Repayment</div><div class="k-val">Rs. ${fmt(totalRepay)}</div><div class="k-sub">Paid amount</div></div>
+    ${totalRebate > 0 ? `<div class="kpi" style="--kc:#0077bb"><div class="k-label">Rebate / Cashback</div><div class="k-val">Rs. ${fmt(totalRebate)}</div><div class="k-sub">Applied</div></div>` : ''}
+    <div class="kpi" style="--kc:${Math.abs(finalBalance)<0.01?'#006633':'#cc2200'}"><div class="k-label">Closing Balance</div><div class="k-val">Rs. ${fmt(Math.abs(finalBalance))}</div><div class="k-sub">${status}</div></div>
+  </div>`;
+
+  // SOA Table
+  html += `<div class="table-wrap">
+    <div class="table-title">Statement of Account — Transaction Details</div>
+    <table><thead><tr>
+      <th>Date</th><th>Narration</th>
+      <th class="num">Value (Rs.)</th>
+      <th>Dr / Cr</th>
+      <th class="num">Outstanding Balance (Rs.)</th>
+    </tr></thead><tbody>`;
+
+  rows.forEach(row => {
+    if (row.section) {
+      html += `<tr class="sep-row"><td colspan="5">${row.section}</td></tr>`;
+    } else {
+      const balClass = Math.abs(row.balance) < 0.01 ? 'bal-zero' : 'bal-neg';
+      const balSign  = row.balance < 0 ? '-' : '';
+      html += `<tr>
+        <td class="date">${row.date}</td>
+        <td class="narr">${row.narration}</td>
+        <td class="num ${row.drCr==='Dr'?'dr':'cr'}">${fmt(row.value)}</td>
+        <td><span class="tag ${row.drCr==='Dr'?'dr':'cr'}">${row.drCr}</span></td>
+        <td class="num ${balClass}">${balSign}${fmt(Math.abs(row.balance))}</td>
+      </tr>`;
+    }
+  });
+  html += `</tbody></table></div>`;
+
+  // Summary
+  html += `<div class="summary-wrap">
+    <div class="table-title">Summary</div>
+    <div class="sum-row"><span class="s-label">Principal Disbursed</span><span class="s-val">Rs. ${fmt(disbursed)}</span></div>
+    <div class="sum-row"><span class="s-label">Total Interest Accrued</span><span class="s-val">Rs. ${fmt(totalInterest)}</span></div>
+    <div class="sum-row"><span class="s-label">Total Debits</span><span class="s-val">Rs. ${fmt(totalDr)}</span></div>
+    ${totalRebate>0?`<div class="sum-row"><span class="s-label">Rebate (Cashback Applied)</span><span class="s-val">Rs. ${fmt(totalRebate)}</span></div>`:''}
+    <div class="sum-row"><span class="s-label">Total Repayment</span><span class="s-val">Rs. ${fmt(totalRepay)}</span></div>
+    <div class="sum-row"><span class="s-label">Total Credits</span><span class="s-val">Rs. ${fmt(totalCr)}</span></div>
+    <div class="sum-row total"><span class="s-label">Closing Outstanding Balance</span><span class="s-val">Rs. ${fmt(Math.abs(finalBalance))}</span></div>
+  </div>`;
+
+  html += `<div class="footer">Generated on ${new Date().toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'})} — System generated statement</div>`;
+
+  lastAllRows = rows; // store full rows including section separators for PDF
+  return { html, rows: rows.filter(r => !r.section), meta };
+}
+</script>
+</body>
+</html>
