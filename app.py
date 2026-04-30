@@ -1,12 +1,51 @@
 import os
 import redshift_connector
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, render_template, request, jsonify, session, redirect, url_for, abort
+from functools import wraps
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
+from authlib.integrations.flask_client import OAuth
 
 load_dotenv()
 
 app = Flask(__name__)
+app.secret_key = os.getenv('FLASK_SECRET_KEY', 'super-secret-key-clm-soa')
+
+# ── Configuration ────────────────────────────────────────────────────────────
+BYPASS_AUTH = False
+BYPASS_GOOGLE_AUTH = False  # Set to True to skip Google login and go to ID/Pass
+
+# ── Authentication ───────────────────────────────────────────────────────────
+USERS = {
+    "admin": "rupeek@2026",
+    "user1": "soa@2026",
+    "user2": "clm@2026",
+    "user3": "sib@2026"
+}
+
+# ── Google OAuth Setup ───────────────────────────────────────────────────────
+oauth = OAuth(app)
+google = oauth.register(
+    name='google',
+    client_id=os.getenv('GOOGLE_CLIENT_ID'),
+    client_secret=os.getenv('GOOGLE_CLIENT_SECRET'),
+    server_metadata_url='https://accounts.google.com/.well-known/openid-configuration',
+    client_kwargs={
+        'scope': 'openid email profile'
+    }
+)
+
+def login_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if BYPASS_AUTH:
+            return f(*args, **kwargs)
+        if not BYPASS_GOOGLE_AUTH and not session.get('google_auth'):
+            return redirect(url_for('login_google'))
+        if 'user' not in session:
+            return redirect(url_for('login'))
+        return f(*args, **kwargs)
+    return decorated_function
 
 # ── Database Connection ──────────────────────────────────────────────────────
 def get_redshift_conn():
@@ -541,11 +580,56 @@ def build_soa(data, bank='federal', status='closed'):
     }
 
 # ── Routes ───────────────────────────────────────────────────────────────────
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        username = request.form.get('username')
+        password = request.form.get('password')
+        if username in USERS and USERS[username] == password:
+            session['user'] = username
+            return redirect(url_for('index'))
+        return render_template('login.html', error="Invalid credentials")
+    
+    return render_template('login.html')
+
+@app.route('/login/google')
+def login_google():
+    if session.get('google_auth'):
+        return redirect(url_for('login'))
+    return render_template('gateway.html')
+
+@app.route('/login/google/authorize')
+def login_google_authorize():
+    redirect_uri = url_for('auth', _external=True)
+    return google.authorize_redirect(redirect_uri)
+
+@app.route('/auth')
+def auth():
+    token = google.authorize_access_token()
+    user_info = token.get('userinfo')
+    if user_info:
+        email = user_info.get('email', '')
+        if not email.endswith('@rupeek.com'):
+            session.clear()
+            return "Access restricted to @rupeek.com domain.", 403
+        
+        session['google_auth'] = True
+        session['google_email'] = email
+        return redirect(url_for('login'))
+    return redirect(url_for('login_google'))
+
+@app.route('/logout')
+def logout():
+    session.clear()
+    return redirect(url_for('login'))
+
 @app.route('/')
+@login_required
 def index():
     return render_template('index.html')
 
 @app.route('/generate', methods=['POST'])
+@login_required
 def generate():
     lms_id = request.form.get('lms_id', '').strip()
     try:

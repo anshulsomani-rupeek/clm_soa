@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Secure Access - Rupeek SOA</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #003366 0%, #004B87 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #333;
+        }
+        .gateway-card {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            width: 100%;
+            max-width: 420px;
+            padding: 48px;
+            text-align: center;
+        }
+        .logo {
+            width: 180px;
+            margin-bottom: 30px;
+        }
+        h1 {
+            font-size: 22px;
+            margin-bottom: 12px;
+            color: #003366;
+        }
+        p {
+            color: #666;
+            font-size: 14px;
+            margin-bottom: 40px;
+            line-height: 1.5;
+        }
+        .google-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            width: 100%;
+            padding: 14px;
+            background: white;
+            color: #555;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 15px;
+            font-weight: 600;
+            text-decoration: none;
+            transition: all 0.2s;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        .google-btn:hover {
+            background: #f8fafc;
+            border-color: #ccc;
+            transform: translateY(-1px);
+        }
+        .google-btn img { width: 20px; height: 20px; }
+        .step-indicator {
+            margin-top: 30px;
+            font-size: 11px;
+            color: #aaa;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+    </style>
+</head>
+<body>
+    <div class="gateway-card">
+        <img src="/static/rpk-cap-logo.png" alt="Rupeek Capital" class="logo">
+        <h1>Secure Access Gateway</h1>
+        <p>This internal tool is restricted to Rupeek employees. Please authenticate with your corporate account to proceed.</p>
+
+        <a href="/login/google/authorize" class="google-btn">
+            <img src="https://www.gstatic.com/images/branding/product/1x/gsa_512dp.png" alt="Google">
+            Sign in with Rupeek Google
+        </a>
+
+        <div class="step-indicator">Step 1 of 2: Corporate Auth</div>
+    </div>
+</body>
+</html>
