@@ -157,23 +157,14 @@
 <body>
     <div class="container">
         <h1>SOA Generator</h1>
-        <p class="subtitle">Federal Bank Statement of Account</p>
+        <p class="subtitle">Statement of Account Generator</p>
 
         <div class="error" id="errorMsg"></div>
 
         <form id="soaForm" onsubmit="handleSubmit(event)">
-            <div class="form-group-row">
-                <div class="form-group" style="flex: 1;">
-                    <label for="lmsId">LMS ID / Account Number</label>
-                    <input type="text" id="lmsId" name="lms_id" placeholder="Enter LMS ID" required autofocus />
-                </div>
-                <div class="form-group" style="flex: 1;">
-                    <label for="bankSelect">Bank</label>
-                    <select id="bankSelect" name="bank">
-                        <option value="federal">Federal Bank</option>
-                        <option value="sib">South Indian Bank (SIB)</option>
-                    </select>
-                </div>
+            <div class="form-group">
+                <label for="lmsId">LMS ID / Account Number</label>
+                <input type="text" id="lmsId" name="lms_id" placeholder="Enter LMS ID" required autofocus />
             </div>
 
             <button type="submit" id="submitBtn">Generate SOA</button>
@@ -189,7 +180,6 @@
             event.preventDefault();
 
             const lmsId = document.getElementById('lmsId').value.trim();
-            const bank = document.getElementById('bankSelect').value;
             const errorMsg = document.getElementById('errorMsg');
             const submitBtn = document.getElementById('submitBtn');
             const loader = document.getElementById('loader');
@@ -200,7 +190,6 @@
 
             const formData = new FormData();
             formData.append('lms_id', lmsId);
-            formData.append('bank', bank);
 
             fetch('/generate', {
                 method: 'POST',

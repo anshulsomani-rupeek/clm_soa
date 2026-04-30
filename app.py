@@ -18,6 +18,34 @@ def get_redshift_conn():
         password=os.getenv('REDSHIFT_PASSWORD')
     )
 
+# ── Lender Identification ───────────────────────────────────────────────────
+def identify_lender(conn, lms_id):
+    """Identify the lender slug based on lender_id in dw.account_svc_loan."""
+    lender_map = {
+        '60b7f0e0cbe7401f71ffcbda': 'sib',
+        '5a43cfbebc40a39a3bc1207d': 'federal',
+        '62be94b2beb2db743c17bc4c': 'axis',
+        '5d75924e5bf87df5130767ae': 'icici-bank',
+        '635a0b977762f40fc068fe03': 'indianbank',
+        '5cdd3ebad54a11e613c3a6b5': 'kvb',
+        '5f916dab9617a826bd84a9f3': 'saison',
+        '637de2591a0aab715655885b': 'liquiloans',
+        '5ac38436aa1a12f3691dbf99': 'rupeek',
+        '57288d5c3e2291476b2a0a4e': 'yog',
+        '63e340d634c9599729eb97d7': 'cholamandalam'
+    }
+    query = "SELECT lender_id FROM dw.account_svc_loan WHERE lms_id = %s LIMIT 1"
+    try:
+        cursor = conn.cursor()
+        cursor.execute(query, (lms_id,))
+        row = cursor.fetchone()
+        cursor.close()
+        if row and row[0] in lender_map:
+            return lender_map[row[0]]
+    except:
+        pass
+    return 'federal'  # Default fallback
+
 # ── Query Functions ──────────────────────────────────────────────────────────
 def query_crv_data(conn, lms_id):
     """Query dw.account_svc_customer_rupeek_view for MIS and DAY_CHANGE data."""
@@ -90,7 +118,6 @@ def query_charges(conn, lms_id):
             'charge_date': str(row[2])[:10] if row[2] else None
         })
     return result
-
 def query_customer_details(conn, lms_id, bank='federal'):
     """Query tech.mis_fed_outstanding_till_date for customer and branch details."""
     if bank == 'sib':
@@ -378,9 +405,10 @@ def build_soa(data, bank='federal', status='closed'):
             reps_on_last_date = rep_by_date.get(last_rep_date, [])
             rep_rec = next((r for r in reps_on_last_date if r.get('unposted_interest', 0) > 0), None)
 
-            is_repledge = any('repledge' in (r.get('repayment_type') or '').lower() for r in reps_on_last_date)
-
-            if is_repledge:
+            # Suppress interest for repledge or part-release closures
+            is_special_closure = any(k in (r.get('repayment_type') or '').lower() for k in ['repledge', 'part-release'] for r in reps_on_last_date)
+            
+            if is_special_closure:
                 interest = 0
             else:
                 interest = (dc_rec['unposted_interest'] if dc_rec and dc_rec.get('unposted_interest', 0) > 0
@@ -520,13 +548,12 @@ def index():
 @app.route('/generate', methods=['POST'])
 def generate():
     lms_id = request.form.get('lms_id', '').strip()
-    bank = request.form.get('bank', 'federal').strip().lower()
-
-    if not lms_id:
-        return jsonify({'error': 'LMS ID is required'}), 400
-
     try:
         conn = get_redshift_conn()
+
+        # Automatically identify the bank based on lender_id
+        bank = identify_lender(conn, lms_id)
+        print(f"[auto-detect] lms_id={lms_id} detected_bank={bank}")
 
         # Query data
         crv_data = query_crv_data(conn, lms_id)
@@ -650,6 +677,28 @@ def generate():
                 running += txn['deposit']
                 total_d += txn['deposit']
             txn['balance'] = running
+
+        # Add reversal entry for repledge/part-release cases to zero out balance
+        is_repledge_loan = any('repledge' in (r.get('repayment_type') or '').lower() for r in crv_data)
+        is_part_release_loan = any('part-release' in (r.get('repayment_type') or '').lower() for r in crv_data)
+        
+        if (is_repledge_loan or is_part_release_loan) and not is_open and running != 0:
+            reversal_amt = abs(running)
+            narration = 'Loan Renewal'
+            if is_part_release_loan:
+                narration = 'Loan Part Release'
+                
+            renewal_entry = {
+                'date': meta['last_date'],
+                'narration': narration,
+                'withdrawal': 0,
+                'deposit': reversal_amt,
+                'balance': 0,
+                'cr_dr': 'CR'
+            }
+            transactions.append(renewal_entry)
+            total_d += reversal_amt
+            running = 0
 
         is_closed = customer.get('status', '').lower() == 'closed'
 
