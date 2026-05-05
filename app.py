@@ -12,8 +12,8 @@ app = Flask(__name__)
 app.secret_key = os.getenv('FLASK_SECRET_KEY', 'super-secret-key-clm-soa')
 
 # ── Configuration ────────────────────────────────────────────────────────────
-BYPASS_AUTH = False
-BYPASS_GOOGLE_AUTH = False  # Set to True to skip Google login and go to ID/Pass
+BYPASS_AUTH = True
+BYPASS_GOOGLE_AUTH = True  # Set to True to skip Google login and go to ID/Pass
 
 # ── Authentication ───────────────────────────────────────────────────────────
 USERS = {
