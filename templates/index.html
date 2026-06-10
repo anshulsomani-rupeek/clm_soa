@@ -188,14 +188,40 @@
             submitBtn.disabled = true;
             loader.style.display = 'block';
 
+            const taskId = 'task_' + Math.random().toString(36).substr(2, 9);
             const formData = new FormData();
             formData.append('lms_id', lmsId);
+            formData.append('task_id', taskId);
+
+            let logsDiv = document.getElementById('liveLogs');
+            if (!logsDiv) {
+                logsDiv = document.createElement('div');
+                logsDiv.id = 'liveLogs';
+                logsDiv.style.marginTop = '15px';
+                logsDiv.style.textAlign = 'left';
+                logsDiv.style.fontSize = '12px';
+                logsDiv.style.color = '#004B87';
+                logsDiv.style.fontFamily = 'monospace';
+                loader.appendChild(logsDiv);
+            }
+            logsDiv.innerHTML = '';
+
+            const statusInterval = setInterval(() => {
+                fetch('/status/' + taskId)
+                    .then(r => r.json())
+                    .then(logs => {
+                        if (logs && logs.length > 0) {
+                            logsDiv.innerHTML = logs.map(l => '<div>✓ ' + l + '</div>').join('');
+                        }
+                    }).catch(e => {});
+            }, 500);
 
             fetch('/generate', {
                 method: 'POST',
                 body: formData
             })
                 .then(res => {
+                    clearInterval(statusInterval);
                     if (res.ok) {
                         // HTML response — replace page content
                         return res.text().then(html => {
@@ -210,6 +236,7 @@
                     }
                 })
                 .catch(err => {
+                    clearInterval(statusInterval);
                     submitBtn.disabled = false;
                     loader.style.display = 'none';
                     errorMsg.textContent = err.message;

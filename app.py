@@ -1,6 +1,8 @@
 import os
+import re
 import redshift_connector
-from flask import Flask, render_template, request, jsonify, session, redirect, url_for, abort
+import json
+from flask import Flask, render_template, request, jsonify, session, redirect, url_for, abort, Response, stream_with_context
 from functools import wraps
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
@@ -51,7 +53,7 @@ def login_required(f):
 def get_redshift_conn():
     return redshift_connector.connect(
         host=os.getenv('REDSHIFT_HOST'),
-        port=int(os.getenv('REDSHIFT_PORT', '5439')),
+        port=int(os.getenv('REDSHIFT_PORT', '5444')),
         database=os.getenv('REDSHIFT_DB'),
         user=os.getenv('REDSHIFT_USER'),
         password=os.getenv('REDSHIFT_PASSWORD')
@@ -81,8 +83,8 @@ def identify_lender(conn, lms_id):
         cursor.close()
         if row and row[0] in lender_map:
             return lender_map[row[0]]
-    except:
-        pass
+    except Exception as e:
+        conn.rollback()
     return 'federal'  # Default fallback
 
 # ── Query Functions ──────────────────────────────────────────────────────────
@@ -283,8 +285,8 @@ def query_sib_customer_address(conn, lms_id):
                 'address': row[0] or f"{row[2] or ''} {row[3] or ''}".strip(),
                 'city': row[1] or ''
             }
-    except:
-        pass
+    except Exception as e:
+        conn.rollback()
     return {'address': '', 'city': ''}
 
 def query_scheme_short(conn, lms_id):
@@ -306,8 +308,8 @@ def query_scheme_short(conn, lms_id):
         cursor.close()
         if row:
             return row[0]
-    except:
-        pass
+    except Exception as e:
+        conn.rollback()
     return None
 
 def query_sib_gold_dates(conn, lms_id):
@@ -332,38 +334,50 @@ def query_sib_gold_dates(conn, lms_id):
                 'cldate': str(row[1])[:10] if row[1] else None
             }
     except Exception as e:
+        conn.rollback()
         print(f"[gold_dates] Error: {e}")
     return {'gl_no': None, 'cldate': None}
 
-def query_sib_customer_profile(conn, lms_id):
-    """Fetch profile data using temp.mapping table for SIB loans."""
+def query_sib_customer_profile(conn, phone):
+    """Fetch profile data using phone match to bypass temp.mapping permissions."""
+    if not phone:
+        return {'customer_name': '', 'permanent_address': '', 'email': '', 'mobile_number': ''}
+        
+    digits = re.sub(r'\D', '', phone)
+    if digits.startswith('91') and len(digits) == 12:
+        digits = digits[2:]
+        
     query = """
     SELECT  
         c.customerproofname,
         c.permanentaddress,
         u.email,
         u.phone_decrypted
-    FROM dw.core_customerprofile c
-    LEFT JOIN dw.core_user u
+    FROM dw.core_user u
+    LEFT JOIN dw.core_customerprofile c
         ON c.userid = u.id
-    WHERE c.userid IN (SELECT DISTINCT requesterid FROM temp.mapping WHERE gl = %s)
+    WHERE u.phone_decrypted IN (%s, %s, %s)
     LIMIT 1
     """
+    cursor = None
     try:
         cursor = conn.cursor()
-        cursor.execute(query, (lms_id,))
+        cursor.execute(query, (digits, '+91' + digits, '91' + digits))
         row = cursor.fetchone()
-        cursor.close()
-        print(f"[profile] lms_id={lms_id} row={row}")
+        print(f"[profile] phone={phone} row={row}")
         if row:
             return {
                 'customer_name': row[0],
-                'permanent_address': row[1],
+                'permanent_address': row[1].replace('\n', ' ') if row[1] else '',
                 'email': row[2],
                 'mobile_number': row[3]
             }
     except Exception as e:
+        conn.rollback()
         print(f"[profile] ERROR: {e}")
+    finally:
+        if cursor:
+            cursor.close()
     return {'customer_name': '', 'permanent_address': '', 'email': '', 'mobile_number': ''}
 
 
@@ -473,12 +487,18 @@ def build_soa(data, bank='federal', status='closed'):
                     one_day_int = recs[-1].get('unposted_interest', 0) - recs[-2].get('unposted_interest', 0)
                 interest += one_day_int
 
-            interest_entries.append({
-                'mo': mo,
-                'post_date': post_date,
-                'end_date': end_date,
-                'interest': interest
-            })
+            # If loan is open/active, do not post interest accrual for the current/future month
+            is_open_loan = (status.lower() in ['open', 'opened', 'active'])
+            current_month = datetime.now().strftime('%Y-%m')
+            if is_open_loan and (mo >= current_month or post_date > datetime.now().strftime('%Y-%m-%d')):
+                print(f"[build_soa] Skipping interest accrual posting for open loan in ongoing/future month: mo={mo}, post_date={post_date}")
+            else:
+                interest_entries.append({
+                    'mo': mo,
+                    'post_date': post_date,
+                    'end_date': end_date,
+                    'interest': interest
+                })
 
     # Build transaction rows
     balance = 0
@@ -623,6 +643,23 @@ def logout():
     session.clear()
     return redirect(url_for('login'))
 
+import tempfile
+
+def get_log_file(task_id):
+    return os.path.join(tempfile.gettempdir(), f"soa_logs_{task_id}.json")
+
+@app.route('/status/<task_id>')
+@login_required
+def status(task_id):
+    log_file = get_log_file(task_id)
+    if os.path.exists(log_file):
+        try:
+            with open(log_file, 'r') as f:
+                return jsonify(json.load(f))
+        except:
+            pass
+    return jsonify([])
+
 @app.route('/')
 @login_required
 def index():
@@ -632,17 +669,53 @@ def index():
 @login_required
 def generate():
     lms_id = request.form.get('lms_id', '').strip()
+    task_id = request.form.get('task_id', '').strip()
+    log_file = None
+    if task_id:
+        log_file = get_log_file(task_id)
+        with open(log_file, 'w') as f:
+            json.dump([], f)
+    
+    conn = None
     try:
+        import time
+        t_start = time.time()
+        query_logs = []
+
+        def log_time(name, start):
+            dur = time.time() - start
+            msg = f"{name} took {dur:.2f}s"
+            print(f"[Timer] {msg}")
+            if log_file:
+                try:
+                    with open(log_file, 'r') as f:
+                        logs = json.load(f)
+                except:
+                    logs = []
+                logs.append(msg)
+                with open(log_file, 'w') as f:
+                    json.dump(logs, f)
+            query_logs.append({'name': name, 'time': dur})
+            return time.time()
+        
+        t_curr = t_start
         conn = get_redshift_conn()
+        t_curr = log_time('get_redshift_conn', t_curr)
 
         # Automatically identify the bank based on lender_id
         bank = identify_lender(conn, lms_id)
         print(f"[auto-detect] lms_id={lms_id} detected_bank={bank}")
+        t_curr = log_time('identify_lender', t_curr)
 
         # Query data
         crv_data = query_crv_data(conn, lms_id)
+        t_curr = log_time('query_crv_data', t_curr)
+        
         charges = query_charges(conn, lms_id)
+        t_curr = log_time('query_charges', t_curr)
+        
         customer = query_customer_details(conn, lms_id, bank)
+        t_curr = log_time('query_customer_details', t_curr)
         if customer:
             if customer.get('customer_name'):
                 customer['customer_name'] = customer['customer_name'].title()
@@ -650,12 +723,22 @@ def generate():
                 customer['branch_name'] = customer['branch_name'].title()
 
         clm_data = None
+        t_curr = time.time()
         if bank == 'sib':
             clm_data = query_sib_clm_mapping(conn, lms_id)
+            t_curr = log_time('query_sib_clm_mapping', t_curr)
+            
             addr_data = query_sib_customer_address(conn, lms_id)
-            profile_data = query_sib_customer_profile(conn, lms_id)
+            t_curr = log_time('query_sib_customer_address', t_curr)
+            
+            profile_data = query_sib_customer_profile(conn, customer.get('mobile_number', ''))
+            t_curr = log_time('query_sib_customer_profile', t_curr)
+            
             scheme_short = query_scheme_short(conn, lms_id)
+            t_curr = log_time('query_scheme_short', t_curr)
+            
             gold_dates = query_sib_gold_dates(conn, lms_id)
+            t_curr = log_time('query_sib_gold_dates', t_curr)
             if clm_data:
                 # Update customer details with CLM data if found
                 customer['status'] = clm_data['status']
@@ -680,37 +763,37 @@ def generate():
                 customer['gold_loan_start'] = gold_dates.get('gl_no')
                 customer['gold_loan_end'] = gold_dates.get('cldate')
 
-            # SIB Specific Logic: If loan is OPEN/OPENED, restrict SOA till the first day of the current month
+            # SIB Specific Logic: If loan is OPEN/OPENED, set custom closing date to the latest transaction date
             if clm_data and clm_data['status'].lower() in ['open', 'opened', 'active']:
-                first_day_of_month = datetime.now().replace(day=1).strftime('%Y-%m-%d')
-                crv_data = [r for r in crv_data if r['value_recorded_date'] <= first_day_of_month]
-                charges = [r for r in charges if r['charge_date'] and r['charge_date'] <= first_day_of_month]
-                # Update meta last_date to match the cut-off
                 if crv_data:
-                    # Sort to find last date
                     temp_sorted = sorted(crv_data, key=lambda x: x['value_recorded_date'])
-                    meta_last_date = temp_sorted[-1]['value_recorded_date']
+                    customer['custom_closing_date'] = temp_sorted[-1]['value_recorded_date']
                 else:
-                    meta_last_date = first_day_of_month
-                
-                # We need to manually inject this into the context later
-                customer['custom_closing_date'] = meta_last_date
+                    customer['custom_closing_date'] = datetime.now().strftime('%Y-%m-%d')
+                    customer['custom_closing_date'] = datetime.now().strftime('%Y-%m-%d')
 
-        conn.close()
-
+        t_before_soa = time.time()
         # Calculate SOA
         soa_result = build_soa(crv_data, bank=bank, status=customer.get('status', 'closed'))
+        t_soa = time.time()
+        print(f"[Timer] build_soa took {t_soa - t_before_soa:.2f}s")
+        print(f"[Timer] Total /generate endpoint took {t_soa - t_start:.2f}s")
         transactions = soa_result['rows']   # raw YYYY-MM-DD dates still intact
         meta = soa_result['meta']
 
         total_service_fee = 0
         service_fee_date = '—'
+        total_stamp_duty = 0
+        stamp_duty_date = '—'
         for charge in charges:
             if charge['total_charge'] > 0 and charge['charge_date']:
                 c_type = (charge['charge_type'] or '').upper()
                 if 'SERVICE_FEE' in c_type or 'SERVICE FEE' in c_type:
                     total_service_fee += charge['total_charge']
                     service_fee_date = charge['charge_date']
+                elif 'STAMP_DUTY' in c_type or 'STAMP DUTY' in c_type:
+                    total_stamp_duty += charge['total_charge']
+                    stamp_duty_date = charge['charge_date']
                 elif 'PF' in c_type or 'PROCESSING' in c_type or 'UPFRONT' in c_type:
                     # DR entry for the UPFRONT PF / Processing Fee at its actual date
                     transactions.append({
@@ -742,6 +825,29 @@ def generate():
                 'narration': 'Service Fee Paid',
                 'withdrawal': 0,
                 'deposit': total_service_fee,
+                'balance': 0,
+                'cr_dr': 'CR'
+            })
+
+        # Add Stamp Duty entries at the closing date (DR and CR of same value)
+        # Only for CLOSED loans
+        if total_stamp_duty > 0 and not is_open:
+            closing_date = meta['last_date']
+            # DR entry
+            transactions.append({
+                'date': closing_date,
+                'narration': 'Stamp Duty Charge',
+                'withdrawal': total_stamp_duty,
+                'deposit': 0,
+                'balance': 0,
+                'cr_dr': 'DR'
+            })
+            # CR entry
+            transactions.append({
+                'date': closing_date,
+                'narration': 'Stamp Duty Paid',
+                'withdrawal': 0,
+                'deposit': total_stamp_duty,
                 'balance': 0,
                 'cr_dr': 'CR'
             })
@@ -816,6 +922,8 @@ def generate():
             'bank': bank,
             'service_fee_amount': total_service_fee,
             'service_fee_date': _format_date(service_fee_date),
+            'stamp_duty_amount': total_stamp_duty,
+            'stamp_duty_date': _format_date(stamp_duty_date),
             'status': customer.get('status', '—'),
             'address': customer.get('address', '—'),
             'city': customer.get('city', '—'),
@@ -828,13 +936,20 @@ def generate():
             'email': customer.get('email', ''),
             'scheme_short': customer.get('scheme_short', ''),
             'gold_loan_start': _format_date(customer.get('gold_loan_start')),
-            'gold_loan_end': _format_date(customer.get('gold_loan_end'))
+            'gold_loan_end': _format_date(customer.get('gold_loan_end')),
+            'query_logs': query_logs
         }
 
         return render_template('soa.html', **context)
 
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+    finally:
+        if conn:
+            try:
+                conn.close()
+            except Exception as ce:
+                print(f"[ERROR] Failed to close connection: {ce}")
 
 def _format_date(date_str):
     """Convert YYYY-MM-DD to DD-MM-YYYY."""
